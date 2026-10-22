@@ -1,7 +1,7 @@
 import Header from '@/components/Header';
-import FlyersSection from '@/components/FlyersSection';
 import MundoMusicaSection from '@/components/MundoMusicaSection';
 import GaleriasSection from '@/components/GaleriasSection';
+import EventosProximos from '@/components/EventosProximos';
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -11,7 +11,7 @@ export default function Home() {
     <main className="min-h-screen bg-black">
       <Header />
       {/* Hero */}
-      <section className="relative h-[60vh] md:h-[70vh] overflow-hidden">
+      <section className="relative h- md:h- overflow-hidden">
         <img src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600" className="absolute inset-0 w-full h-full object-cover" alt="" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent"></div>
@@ -24,7 +24,7 @@ export default function Home() {
           </div>
         </div>
         {/* Ad Top */}
-        <div className="absolute top-4 right-4 hidden lg:flex bg-white/10 backdrop-blur border border-dashed border-white/20 rounded-lg h-[90px] w-[728px] items-center justify-center text-xs text-white/50">Espaço Anunciante - Leaderboard 728x90</div>
+        <div className="absolute top-4 right-4 hidden lg:flex bg-white/10 backdrop-blur border border-dashed border-white/20 rounded-lg h- w- items-center justify-center text-xs text-white/50">Espaço Anunciante - Leaderboard 728x90</div>
       </section>
 
       <EventosProximos />
@@ -36,7 +36,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 grid md:grid-cols-3 gap-8">
           <div><img src="/Logo_futurista_Itapecuru_Baladas.png" className="h-14 w-auto" alt="" /><p className="text-white/60 text-sm mt-3">Registrando momentos, conectando pessoas.<br/>Cobertura de eventos de Itapecuru-Mirim e região.</p></div>
           <div><h4 className="font-black uppercase text-sm mb-3">Cidades</h4><ul className="text-sm text-white/60 space-y-1"><li>Itapecuru-Mirim</li><li>Santa Rita</li><li>Rosário</li><li>Presidente Vargas</li></ul></div>
-          <div><h4 className="font-black uppercase text-sm mb-3">Siga @itapecurubaladas</h4><div className="flex gap-2"><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">IG</a><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">TT</a><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">YT</a><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">WA</a></div><p className="text-xs text-white/40 mt-4">© 2026 Itapecuru Baladas. Todos os direitos reservados.</p></div>
+          <div><h4 className="font-black uppercase text-sm mb-3">Siga @itapecurubalada</h4><div className="flex gap-2"><a href="https://instagram.com/itapecurubalada" target="_blank" className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">IG</a><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">TT</a><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">YT</a><a className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-[#0A84FF]">WA</a></div><p className="text-xs text-white/40 mt-4">© 2026 Itapecuru Baladas. Todos os direitos reservados.</p></div>
         </div>
       </footer>
     </main>
