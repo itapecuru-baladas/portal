@@ -16,7 +16,7 @@ export default function Header() {
         </Link>
         <nav className="hidden md:flex gap-6 text-sm font-bold uppercase tracking-wide">
           <Link href="/" className="hover:text-[#0A84FF]">Início</Link>
-          <Link href="#flyers" className="hover:text-[#0A84FF]">Flyers</Link>
+          <Link href="#flyers" className="hover:text-[#0A84FF]">Agenda da Semana</Link>
           <Link href="#musica" className="hover:text-[#0A84FF]">Mundo da Música</Link>
           <Link href="#galerias" className="hover:text-[#0A84FF]">Galerias</Link>
         </nav>
