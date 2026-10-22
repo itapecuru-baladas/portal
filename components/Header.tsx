@@ -22,11 +22,11 @@ export default function Header() {
         </nav>
         <div className="flex items-center gap-3">
           <div className="hidden md:flex gap-2">
-            <a href="https://instagram.com" target="_blank" className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-[#0A84FF]">IG</a>
+            <a href="https://instagram.com/itapecurubalada" target="_blank" className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-[#0A84FF]">IG</a>
             <a href="https://tiktok.com" target="_blank" className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-[#0A84FF]">TT</a>
             <a href="https://youtube.com" target="_blank" className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-[#0A84FF]">YT</a>
           </div>
-          <Link href="/admin" className="bg-gradient-to-r from-[#0A84FF] to-[#0066FF] px-4 py-2 rounded-full text-xs font-black skew-x-[-6deg]"><span className="skew-x-[6deg] block">ADMIN</span></Link>
+          
         </div>
       </div>
     </header>
