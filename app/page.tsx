@@ -27,7 +27,7 @@ export default function Home() {
         <div className="absolute top-4 right-4 hidden lg:flex bg-white/10 backdrop-blur border border-dashed border-white/20 rounded-lg h-[90px] w-[728px] items-center justify-center text-xs text-white/50">Espaço Anunciante - Leaderboard 728x90</div>
       </section>
 
-      <FlyersSection />
+      <EventosProximos />
       <MundoMusicaSection />
       <GaleriasSection />
 
