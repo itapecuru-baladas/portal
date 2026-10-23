@@ -3,3 +3,4 @@ supabase
 Pillow
 requests
 nest_asyncio
+Flask

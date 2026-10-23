@@ -1,8 +1,8 @@
-import os
-import asyncio
+import os, asyncio, threading
 import nest_asyncio
 nest_asyncio.apply()
 
+from flask import Flask
 from supabase import create_client
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
@@ -14,6 +14,17 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---- Web server fake pro Render não reclamar ----
+flask_app = Flask(__name__)
+@flask_app.route("/")
+def health():
+    return "Bot Itapecuru Baladas - OK! 🤖"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    flask_app.run(host="0.0.0.0", port=port)
+
 print("🚀 Bot Itapecuru Baladas iniciado!")
 
 def aplica_marca_dagua(caminho):
@@ -37,10 +48,10 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supabase.table("fotos").insert({"url": url}).execute()
         await update.message.reply_text(f"✅ Publicada! {url}")
     except Exception as e:
-        print(f"Erro: {e}")
+        print(e)
         await update.message.reply_text(f"❌ Erro: {e}")
 
-async def main():
+async def run_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_foto))
     print("📡 Ouvindo Telegram...")
@@ -50,4 +61,5 @@ async def main():
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    threading.Thread(target=run_flask, daemon=True).start()
+    asyncio.run(run_bot())
