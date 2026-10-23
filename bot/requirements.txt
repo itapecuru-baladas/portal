@@ -1,5 +1,7 @@
 python-telegram-bot==20.7
 supabase==2.3.1
-Pillow==10.2.0
-httpx==0.26.0
-python-dotenv==1.0.0
+Pillow==10.0.0
+feedparser==6.0.10
+requests==2.31.0
+apscheduler==3.10.4
+nest_asyncio==1.5.8

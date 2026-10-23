@@ -3,6 +3,13 @@ import MundoMusicaSection from '@/components/MundoMusicaSection';
 import GaleriasSection from '@/components/GaleriasSection';
 import EventosProximos from '@/components/EventosProximos';
 
+import ChartsSection from '@/components/ChartsSection'
+
+<EventosProximos />
+<ChartsSection />
+<MundoMusicaSection />
+<GaleriasSection />
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
