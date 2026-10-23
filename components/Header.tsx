@@ -18,7 +18,7 @@ export default function Header() {
           <Link href="/" className="hover:text-[#0A84FF]">Início</Link>
           <Link href="#flyers" className="hover:text-[#0A84FF]">Agenda da Semana</Link>
           <Link href="#musica" className="hover:text-[#0A84FF]">Mundo da Música</Link>
-          <Link href="#galerias" className="hover:text-[#0A84FF]">Galerias</Link>
+          <Link href="galerias" className="hover:text-[#0A84FF]">Galerias</Link>
         </nav>
         <div className="flex items-center gap-3">
           <div className="hidden md:flex gap-2">

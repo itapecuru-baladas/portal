@@ -251,3 +251,14 @@ if __name__ == "__main__":
     threading.Thread(target=start_bot_thread, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     flask_app.run(host="0.0.0.0", port=port)
+    @flask_app.route("/")
+def health(): return "Bot Itapecuru Baladas - Telegram + Noticias Gemini LIVE - OK"
+
+@flask_app.route("/forcar-noticias")
+def forcar_noticias():
+    try:
+        buscar_noticias_musica()
+        data = supabase.table("noticias_musica").select("*").order("created_at", desc=True).limit(3).execute()
+        return {"status": "rodou", "noticias": data.data}
+    except Exception as e:
+        return {"erro": str(e)}
