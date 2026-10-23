@@ -2,3 +2,4 @@ python-telegram-bot
 supabase
 Pillow
 requests
+nest_asyncio
