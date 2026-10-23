@@ -1,1 +1,4 @@
-[STRIPPED 74 bytes]
+python-telegram-bot
+supabase
+Pillow
+requests
