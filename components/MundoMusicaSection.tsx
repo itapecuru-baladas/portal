@@ -1,18 +1,83 @@
-useEffect(() => {
-  async function fetchNoticias() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/noticias');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const unicas = Array.from(new Map(data.map((n:any) => [n.link, n])).values()) as Noticia[];
-        const filtradas = active === "Todos" ? unicas : unicas.filter(n => (n.categoria||"").toLowerCase().includes(active.toLowerCase()));
-        setNoticias(filtradas);
+"use client";
+import { useState, useEffect } from 'react';
+
+type Noticia = {
+  id: string;
+  titulo: string;
+  resumo: string;
+  categoria?: string;
+  link?: string;
+  link_externo?: string;
+  imagem_url: string;
+  fonte: string;
+  created_at: string;
+};
+
+export default function MundoMusicaSection() {
+  const cats = ["Todos","Sertanejo","Forró","Piseiro","Pop","Eletrônico","Brega","Pagode"];
+  const [active, setActive] = useState("Todos");
+  const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchNoticias() {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/noticias', { cache: 'no-store' });
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const unicas = Array.from(new Map(data.map((n:any) => [n.link, n])).values()) as Noticia[];
+          const filtradas = active === "Todos" ? unicas : unicas.filter(n => (n.categoria||"").toLowerCase().includes(active.toLowerCase()));
+          setNoticias(filtradas);
+        }
+      } catch (e) {
+        console.error(e);
       }
-    } catch (e) {
-      console.error(e);
+      setLoading(false);
     }
-    setLoading(false);
+    fetchNoticias();
+  }, [active]);
+
+  if (loading) {
+    return (
+      <section id="musica" className="bg-[#0A0A0A] py-10 border-y border-white/5">
+        <div className="max-w-7xl mx-auto px-4 text-white/50">Carregando...</div>
+      </section>
+    );
   }
-  fetchNoticias();
-}, [active]);
+
+  return (
+    <section id="musica" className="bg-[#0A0A0A] py-10 border-y border-white/5">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-black italic uppercase">Mundo da <span className="text-[#0A84FF]">Música</span></h2>
+          </div>
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            {cats.map(c=>(
+              <button key={c} onClick={()=>setActive(c)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold uppercase border ${active===c ? 'bg-gradient-to-r from-[#0A84FF] to-[#0066FF] border-[#0A84FF] text-white' : 'border-white/20 text-white/60'}`}>{c}</button>
+            ))}
+          </div>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {noticias.map((n,i)=>{
+            const url = n.link || n.link_externo || "#";
+            return (
+              <a key={n.id || i} href={url} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-2xl overflow-hidden border border-white/10 group block">
+                <div className="relative h-44">
+                  <img src={n.imagem_url} className="w-full h-full object-cover" alt={n.titulo} />
+                  <span className="absolute top-3 left-3 bg-black/70 text- font-black px-2 py-1 rounded-full">{(n.fonte||"G1").toUpperCase()}</span>
+                </div>
+                <div className="p-4">
+                  <p className="text- text-white/50 mb-2">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
+                  <h3 className="font-bold leading-tight line-clamp-2 text-white">{n.titulo}</h3>
+                  <p className="text-xs text-white/50 mt-2 line-clamp-2">{n.resumo}</p>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
