@@ -39,6 +39,25 @@ def forcar_noticias():
     except Exception as e:
         return {"erro": str(e)}
 
+@flask_app.route("/test-gemini")
+def test_gemini():
+    try:
+        if not GEMINI_KEY:
+            return {"ok": False, "erro": "SEM GEMINI_API_KEY no Environment"}
+        genai.configure(api_key=GEMINI_KEY)
+        # Testa com modelo novo
+        for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash']:
+            try:
+                model = genai.GenerativeModel(model_name)
+                resp = model.generate_content("Diga apenas: Gemini OK em Itapecuru Balada")
+                return {"ok": True, "modelo": model_name, "resposta": resp.text, "key_prefix": GEMINI_KEY[:12]+"..."}
+            except Exception as e:
+                last_err = str(e)
+                continue
+        return {"ok": False, "erro": last_err, "key_prefix": GEMINI_KEY[:12]+"..."}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
 def titulos_parecidos(t1, t2):
     return SequenceMatcher(None, t1.lower(), t2.lower()).ratio() > 0.8
 
@@ -70,53 +89,58 @@ def parse_data(texto):
 def resumir_com_gemini(titulo_original, link):
     try:
         if not GEMINI_KEY:
-            return titulo_original, f"{titulo_original} agita Itapecuru Mirim e regiao!"
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"""Reescreva para evitar plagio - Portal Itapecuru Balada. 
-        Titulo original: {titulo_original} 
+            print("SEM GEMINI_KEY")
+            return titulo_original, f"{titulo_original} agita a noite de Itapecuru Mirim e regiao!"
+        genai.configure(api_key=GEMINI_KEY)
+        prompt = f"""Voce e redator do portal Itapecuru Balada (MA).
+        Reescreva evitando plagio.
+        Titulo original: {titulo_original}
         Link: {link}
-        Responda no formato:
-        TITULO: novo titulo chamativo
-        RESUMO: resumo 2 paragrafos jovem, estilo Itapecuru Balada"""
-        response = model.generate_content(prompt)
-        texto = response.text
-        t_match = re.search(r'TITULO:\s*(.*)', texto)
-        r_match = re.search(r'RESUMO:\s*(.*)', texto, re.DOTALL)
-        novo = t_match.group(1).strip() if t_match else titulo_original
-        resumo = r_match.group(1).strip() if r_match else texto[:300]
-        return novo, resumo
+        Responda EXATAMENTE assim:
+        TITULO: novo titulo chamativo e curto
+        RESUMO: 2 paragrafos, linguagem jovem, local, sem repetir titulo
+        """
+        for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash']:
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                texto = response.text
+                t_match = re.search(r'TITULO:\s*(.*)', texto, re.IGNORECASE)
+                r_match = re.search(r'RESUMO:\s*(.*)', texto, re.IGNORECASE | re.DOTALL)
+                novo = t_match.group(1).strip() if t_match else titulo_original
+                resumo = r_match.group(1).strip() if r_match else texto[:500]
+                print(f"Gemini OK [{model_name}]: {novo[:60]}")
+                return novo, resumo
+            except Exception as e:
+                print(f"Falha modelo {model_name}: {e}")
+                continue
+        return titulo_original, f"{titulo_original} promete movimentar Itapecuru Mirim!"
     except Exception as e:
-        print(f"Erro Gemini: {e}")
-        return titulo_original, f"{titulo_original} promete movimentar a noite de Itapecuru!"
+        print(f"Erro geral Gemini: {e}")
+        return titulo_original, f"{titulo_original} agita Itapecuru!"
 
 def buscar_noticias_musica():
     try:
-        print("Buscando noticias com requests...")
+        print("Buscando noticias...")
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        recentes = supabase.table("noticias_musica").select("titulo, link, conteudo_original").order("created_at", desc=True).limit(50).execute()
-        titulos_recentes = [r['titulo'] for r in recentes.data] if recentes.data else []
-        links_originais = [r['conteudo_original'] for r in recentes.data] if recentes.data else []
+        recentes = supabase.table("noticias_musica").select("titulo, conteudo_original").order("created_at", desc=True).limit(100).execute()
         
         url_feed = "https://g1.globo.com/rss/g1/pop-arte/musica/"
         r = requests.get(url_feed, headers=headers, timeout=15)
         print(f"Status feed: {r.status_code}")
         feed = feedparser.parse(r.content)
-        print(f"Feed achou {len(feed.entries)} noticias")
+        print(f"Feed achou {len(feed.entries)}")
 
         for entry in feed.entries[:5]:
             titulo_original = entry.title.strip()
             link_original = entry.link.strip()
-            
-            # Evita duplicado pelo conteudo_original (link original)
-            if titulo_original in links_originais or link_original in [d.get('conteudo_original') for d in recentes.data or []]:
-                continue
-            # Verifica se já existe esse link original no conteudo_original
+
             check = supabase.table("noticias_musica").select("id").eq("conteudo_original", link_original).execute()
             if check.data:
-                print(f"Ja existe: {titulo_original[:40]}")
+                print(f"Duplicado: {titulo_original[:40]}")
                 continue
 
-            print(f"Processando: {titulo_original[:60]}")
+            print(f"Processando: {titulo_original[:70]}")
             novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
             
             imagem_final = ""
@@ -125,39 +149,36 @@ def buscar_noticias_musica():
             if not imagem_final:
                 imagem_final = "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
 
-            # CORREÇÃO DA FONTE - CITA ORIGINAL
+            # FONTE ORIGINAL - CORRETO PRO SEO
             if "g1.globo.com" in link_original:
                 fonte_original = "G1"
             elif "rollingstone" in link_original.lower():
                 fonte_original = "【entity-Rolling Stone¦canonical_name=Rolling Stone】"
             elif "【entity-gshow¦canonical_name=GShow】" in link_original:
                 fonte_original = "【entity-GShow¦canonical_name=GShow】"
-            elif "【entity-uol¦canonical_name=UOL】" in link_original:
-                fonte_original = "【entity-UOL¦canonical_name=UOL】"
             else:
                 fonte_original = "G1 - Pop e Arte"
 
             resumo_com_fonte = f"{resumo}\n\nVia: {fonte_original}"
 
             try:
-                print(f"Salvando: {novo_titulo[:50]} | Fonte: {fonte_original}")
-                result = supabase.table("noticias_musica").insert({
+                supabase.table("noticias_musica").insert({
                     "titulo": novo_titulo,
                     "resumo": resumo_com_fonte,
-                    "link": "",  # SEM LINK EXTERNO PRA NAO PERDER SEO
-                    "fonte": fonte_original,  # CITA A FONTE ORIGINAL
+                    "link": "",  # SEM LINK EXTERNO
+                    "fonte": fonte_original,  # CITA ORIGINAL
                     "imagem_url": imagem_final,
-                    "conteudo_original": link_original,  # Guarda o link original aqui, escondido
+                    "conteudo_original": link_original,
                     "titulo_hash": f"{int(time.time())}_{random.randint(1000,9999)}"
                 }).execute()
-                print(f"SALVO OK")
+                print(f"SALVO: {novo_titulo[:50]}")
                 time.sleep(1)
             except Exception as e:
                 print(f"Erro salvar: {e}")
 
         print("Ciclo finalizado")
     except Exception as e:
-        print(f"Erro GERAL noticias: {e}")
+        print(f"Erro GERAL: {e}")
         import traceback
         traceback.print_exc()
 
@@ -174,7 +195,7 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caminho_temp = f"temp_{update.effective_user.id}.jpg"
     await file.download_to_drive(caminho_temp)
     user_photos[update.effective_user.id] = caminho_temp
-    await update.message.reply_text("Foto recebida! O que e? 1 - CARTAZ DE FESTA 2 - FOTO GALERIA Digite 1 ou 2")
+    await update.message.reply_text("Foto recebida! O que e?\n1 - CARTAZ DE FESTA\n2 - FOTO GALERIA\nDigite 1 ou 2")
     return PERGUNTA_TIPO
 
 async def pergunta_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -222,7 +243,7 @@ async def nome_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def evento_galeria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['evento_galeria'] = update.message.text
-    await update.message.reply_text("Whatsapp? ou pular")
+    await update.message.reply_text("Whatsapp? ou digite pular")
     return WHATS_FOTOGRAFO
 
 async def whats_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,7 +269,7 @@ async def run_bot():
             app = Application.builder().token(TELEGRAM_TOKEN).build()
             try:
                 await app.bot.delete_webhook(drop_pending_updates=True)
-                print("✅ Webhook deletado - fila limpa")
+                print("Webhook deletado")
             except Exception as e:
                 print(f"Aviso webhook: {e}")
             conv = ConversationHandler(
@@ -268,13 +289,13 @@ async def run_bot():
             app.add_handler(conv)
             await app.initialize()
             await app.start()
-            print("🤖 Bot iniciando polling...")
+            print("Bot polling iniciado")
             await app.updater.start_polling(drop_pending_updates=True)
-            print("🤖 Bot rodando sem conflito!")
+            print("Bot rodando!")
             await asyncio.Event().wait()
         except Exception as e:
             if "Conflict" in str(e):
-                print(f"⚠️ Conflito, tentando em 10s: {e}")
+                print(f"Conflito, retry 10s: {e}")
                 await asyncio.sleep(10)
             else:
                 print(f"Erro bot: {e}")
