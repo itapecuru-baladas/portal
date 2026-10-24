@@ -6,7 +6,8 @@ type Noticia = {
   id: string;
   titulo: string;
   resumo: string;
-  link: string;
+  link?: string;
+  link_externo?: string;
   imagem_url: string;
   fonte: string;
   created_at: string;
@@ -25,8 +26,11 @@ export default function MundoMusicaSection() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(12);
+      
       if (error) {
-        console.error("Erro buscar noticias_musica:", error);
+        console.error("Erro buscar noticias:", error);
+        // Mostra erro no console pra debug
+        console.error(JSON.stringify(error, null, 2));
       } else if (data) {
         setNoticias(data as Noticia[]);
       }
@@ -58,19 +62,22 @@ export default function MundoMusicaSection() {
           </div>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {noticias.map((n,i)=>(
-            <a key={n.id || i} href={n.link} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-2xl overflow-hidden border border-white/10 group cursor-pointer hover:border-[#0A84FF]/40 block">
-              <div className="relative h-44">
-                <img src={n.imagem_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600"} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt={n.titulo} />
-                <span className="absolute top-3 left-3 bg-black/70 backdrop-blur text- font-black px-2 py-1 rounded-full border border-white/20">{(n.fonte || "G1").toUpperCase()}</span>
-              </div>
-              <div className="p-4">
-                <p className="text- text-white/50 mb-2">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
-                <h3 className="font-bold leading-tight line-clamp-2 text-white">{n.titulo}</h3>
-                <p className="text-xs text-white/50 mt-2 line-clamp-2">{n.resumo}</p>
-              </div>
-            </a>
-          ))}
+          {noticias.map((n,i)=>{
+            const url = n.link || n.link_externo || "#";
+            return (
+              <a key={n.id || i} href={url} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-2xl overflow-hidden border border-white/10 group cursor-pointer hover:border-[#0A84FF]/40 block">
+                <div className="relative h-44">
+                  <img src={n.imagem_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600"} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt={n.titulo} />
+                  <span className="absolute top-3 left-3 bg-black/70 backdrop-blur text- font-black px-2 py-1 rounded-full border border-white/20">{(n.fonte || "G1").toUpperCase()}</span>
+                </div>
+                <div className="p-4">
+                  <p className="text- text-white/50 mb-2">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
+                  <h3 className="font-bold leading-tight line-clamp-2 text-white">{n.titulo}</h3>
+                  <p className="text-xs text-white/50 mt-2 line-clamp-2">{n.resumo}</p>
+                </div>
+              </a>
+            );
+          })}
         </div>
         {noticias.length === 0 && (
           <p className="text-white/50 text-center py-10">Nenhuma notícia ainda. Verifique o bot em itapecuru-bot.onrender.com/forcar-noticias</p>
