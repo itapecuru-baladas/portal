@@ -26,7 +26,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health():
-    return "Bot OK - Gemini 2.0 - Sem Itapecuru"
+    return "Bot OK - Gemini 2.5 Flash - Sem Itapecuru"
 
 @flask_app.route("/forcar-noticias")
 def forcar_noticias():
@@ -43,12 +43,12 @@ def test_gemini():
         if not gemini_client:
             return {"ok": False, "erro": "SEM KEY"}
         resp = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents="Diga: OK"
+            model="gemini-2.5-flash",
+            contents="Diga: Gemini 2.5 OK"
         )
-        return {"ok": True, "resposta": resp.text}
+        return {"ok": True, "modelo": "gemini-2.5-flash", "resposta": resp.text}
     except Exception as e:
-        return {"ok": False, "erro": str(e)[:500]}
+        return {"ok": False, "erro": str(e)[:800]}
 
 def aplica_marca_dagua(caminho):
     img = Image.open(caminho).convert("RGB")
@@ -87,7 +87,7 @@ def resumir_com_gemini(titulo_original, link):
         RESUMO: 2 parágrafos sobre a música, sem cidade
         """
         resp = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt
         )
         texto = resp.text
@@ -96,16 +96,14 @@ def resumir_com_gemini(titulo_original, link):
         novo = t.group(1).strip() if t else titulo_original
         resumo = r_match.group(1).strip() if r_match else texto[:600]
 
-        # LIMPEZA FINAL - remove qualquer Itapecuru que o Gemini teimar
         for palavra in ["Itapecuru Mirim", "Itapecuru", "no Maranhão", "do Maranhão", "promete movimentar", "agita Itapecuru"]:
             resumo = resumo.replace(palavra, "")
         resumo = re.sub(r'\s+', ' ', resumo).strip()
 
-        print(f"Gemini OK: {novo[:60]}")
+        print(f"Gemini 2.5 OK: {novo[:60]}")
         return novo, resumo
     except Exception as e:
-        print(f"Erro Gemini: {e}")
-        # Fallback LIMPO sem Itapecuru
+        print(f"Erro Gemini 2.5: {e}")
         return titulo_original, titulo_original
 
 def buscar_noticias_musica():
@@ -122,14 +120,12 @@ def buscar_noticias_musica():
 
             check = supabase.table("noticias_musica").select("id").eq("conteudo_original", link_original).execute()
             if check.data:
-                print(f"Duplicado: {titulo_original[:40]}")
                 continue
 
             print(f"Processando: {titulo_original[:70]}")
             novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
 
             imagem_final = entry.enclosures[0].href if hasattr(entry, 'enclosures') and entry.enclosures else "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
-
             fonte_original = "G1" if "g1.globo" in link_original else "G1 - Pop e Arte"
             resumo_final = f"{resumo}\n\nVia: {fonte_original}"
 
