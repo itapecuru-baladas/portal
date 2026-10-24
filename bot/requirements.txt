@@ -1,7 +1,7 @@
-python-telegram-bot==20.8
-supabase==2.10.0
-Pillow
-Flask
-feedparser
-google-generativeai
-requests
+Flask==2.3.3
+python-telegram-bot==20.7
+supabase==2.3.1
+Pillow==10.0.0
+feedparser==6.0.10
+requests==2.31.0
+google-genai==0.3.0
