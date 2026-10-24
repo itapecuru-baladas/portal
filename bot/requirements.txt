@@ -3,5 +3,3 @@ supabase==2.10.0
 Pillow
 Flask
 feedparser
-google-generativeai
-requests
