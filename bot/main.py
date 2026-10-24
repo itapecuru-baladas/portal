@@ -86,7 +86,7 @@ def buscar_e_salvar_noticias(forcar=False):
     feed = feedparser.parse(RSS_G1_MUSICA)
     print(f"RSS retornou {len(feed.entries)} entries")
     salvas = 0
-    ignoradas = []
+    ignoradas = 0
     for entry in feed.entries[:10]:
         link_real = entry.link
         titulo_orig = entry.title
@@ -95,4 +95,76 @@ def buscar_e_salvar_noticias(forcar=False):
         if not forcar:
             existe = supabase.table("noticias_musica").select("id").eq("link", link_real).execute()
             if len(existe.data) > 0:
-                ignoradas.append(link
+                ignoradas += 1
+                continue
+
+        titulo, resumo = gerar_resumo_com_gemini(titulo_orig, desc_orig)
+        imagem = extrair_imagem(link_real)
+
+        supabase.table("noticias_musica").insert({
+            "titulo": titulo,
+            "resumo": resumo,
+            "link": link_real,
+            "conteudo_original": link_real,
+            "fonte": "G1",
+            "imagem_url": imagem,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        salvas += 1
+        time.sleep(1)
+    return salvas, ignoradas, len(feed.entries)
+
+@app.get("/")
+def home():
+    return {
+        "status": "bot online" if supabase else "sem ENV",
+        "model": MODEL,
+        "env": {
+            "supabase_url": "OK" if SUPABASE_URL else "FALTANDO",
+            "supabase_key": "OK" if SUPABASE_KEY else "FALTANDO",
+            "gemini": "OK" if GEMINI_API_KEY else "FALTANDO"
+        }
+    }
+
+@app.get("/debug-feed")
+def debug_feed():
+    feed = feedparser.parse(RSS_G1_MUSICA)
+    items = []
+    for e in feed.entries[:6]:
+        items.append({
+            "title": e.title,
+            "link": e.link,
+            "summary": limpar_texto(e.get("summary", ""))[:200]
+        })
+    total_banco = 0
+    try:
+        total_banco = len(supabase.table("noticias_musica").select("id").execute().data)
+    except:
+        pass
+    return {
+        "rss_total": len(feed.entries),
+        "rss_primeiros_6": items,
+        "total_no_banco": total_banco
+    }
+
+@app.get("/forcar-noticias")
+def forcar_noticias(forcar: bool = False):
+    try:
+        total, ignoradas, rss_total = buscar_e_salvar_noticias(forcar=forcar)
+        return {
+            "status": "rodou",
+            "total": total,
+            "rss_total": rss_total,
+            "ignoradas_duplicadas": ignoradas,
+            "model": MODEL
+        }
+    except Exception as e:
+        return {"status": "erro", "erro": str(e)}
+
+@app.get("/forcar-noticias-debug")
+def forcar_noticias_debug():
+    return forcar_noticias(forcar=True)
+
+@app.get("/health")
+def health():
+    return {"ok": True}
