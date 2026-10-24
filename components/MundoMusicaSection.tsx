@@ -6,6 +6,7 @@ type Noticia = {
   id: string;
   titulo: string;
   resumo: string;
+  categoria?: string;
   link?: string;
   link_externo?: string;
   imagem_url: string;
@@ -21,23 +22,39 @@ export default function MundoMusicaSection() {
 
   useEffect(() => {
     async function fetchNoticias() {
-      const { data, error } = await supabase
-        .from("noticias_musica")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(12);
+      setLoading(true);
+
+      // TENTA VIA RPC (fura o PGRST205 que travou seu PostgREST)
+      let { data, error } = await supabase.rpc("get_noticias_musica");
+
+      // Se RPC ainda não existe, cai pro from() normal
+      if (error && error.message.includes("get_noticias_musica")) {
+        const res = await supabase
+          .from("noticias_musica")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(12);
+        data = res.data as any;
+        error = res.error as any;
+      }
       
       if (error) {
         console.error("Erro buscar noticias:", error);
-        // Mostra erro no console pra debug
-        console.error(JSON.stringify(error, null, 2));
       } else if (data) {
-        setNoticias(data as Noticia[]);
+        // REMOVE DUPLICATA POR LINK (seu print tinha 【entity-Paul McCartney¦canonical_name=Paul McCartney】 2x)
+        const unicas = Array.from(new Map((data as any[]).map((n:any) => [n.link, n])).values()) as Noticia[];
+        
+        // FILTRO NO CLIENT (porque RPC não tem parâmetro de categoria)
+        const filtradas = active === "Todos" 
+          ? unicas 
+          : unicas.filter(n => (n.categoria || "").toLowerCase().includes(active.toLowerCase()));
+
+        setNoticias(filtradas);
       }
       setLoading(false);
     }
     fetchNoticias();
-  }, []);
+  }, [active]);
 
   if (loading) {
     return (
