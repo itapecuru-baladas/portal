@@ -1,8 +1,9 @@
-Flask==2.3.3
-python-telegram-bot==22.3
-Pillow==10.4.0
-feedparser==6.0.10
-requests==2.32.3
-supabase==2.13.0
-google-genai==1.9.0
-httpx==0.28.1
+fastapi==0.110.0
+uvicorn==0.29.0
+supabase==2.7.0
+google-generativeai==0.5.4
+feedparser==6.0.11
+beautifulsoup4==4.12.3
+requests==2.31.0
+lxml==5.1.0
+python-dotenv==1.0.0
