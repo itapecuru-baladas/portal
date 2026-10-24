@@ -11,7 +11,6 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, ConversationHandler
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
-from difflib import SequenceMatcher
 import feedparser
 import google.generativeai as genai
 
@@ -28,7 +27,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health():
-    return "Bot Itapecuru Baladas - Telegram + Noticias Gemini LIVE - OK"
+    return "Bot Itapecuru Baladas - OK - Gemini 2.0"
 
 @flask_app.route("/forcar-noticias")
 def forcar_noticias():
@@ -43,23 +42,27 @@ def forcar_noticias():
 def test_gemini():
     try:
         if not GEMINI_KEY:
-            return {"ok": False, "erro": "SEM GEMINI_API_KEY no Environment"}
+            return {"ok": False, "erro": "SEM GEMINI_API_KEY"}
         genai.configure(api_key=GEMINI_KEY)
-        # Testa com modelo novo
-        for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash']:
+        modelos_disp = []
+        try:
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    modelos_disp.append(m.name)
+        except Exception as e:
+            modelos_disp = [f"erro listar: {e}"]
+
+        for model_name in ['models/gemini-2.0-flash', 'models/gemini-2.5-flash', 'models/gemini-flash-latest', 'models/gemini-1.5-flash-002', 'gemini-2.0-flash']:
             try:
                 model = genai.GenerativeModel(model_name)
-                resp = model.generate_content("Diga apenas: Gemini OK em Itapecuru Balada")
-                return {"ok": True, "modelo": model_name, "resposta": resp.text, "key_prefix": GEMINI_KEY[:12]+"..."}
+                resp = model.generate_content("Responda apenas: Gemini OK em Itapecuru Balada")
+                return {"ok": True, "modelo_usado": model_name, "resposta": resp.text, "modelos_disponiveis": modelos_disp, "key_prefix": GEMINI_KEY[:10]+"..."}
             except Exception as e:
                 last_err = str(e)
                 continue
-        return {"ok": False, "erro": last_err, "key_prefix": GEMINI_KEY[:12]+"..."}
+        return {"ok": False, "erro": last_err, "modelos_disponiveis": modelos_disp, "key_prefix": GEMINI_KEY[:10]+"..."}
     except Exception as e:
         return {"ok": False, "erro": str(e)}
-
-def titulos_parecidos(t1, t2):
-    return SequenceMatcher(None, t1.lower(), t2.lower()).ratio() > 0.8
 
 def aplica_marca_dagua(caminho):
     img = Image.open(caminho).convert("RGB")
@@ -77,61 +80,53 @@ def aplica_marca_dagua(caminho):
 def parse_data(texto):
     try:
         if "/" in texto:
-            partes = texto.split("/")
-            d = partes[0].zfill(2)
-            m = partes[1].zfill(2)
-            y = partes[2]
-            return f"{y}-{m}-{d}"
+            p = texto.split("/")
+            return f"{p[2]}-{p[1].zfill(2)}-{p[0].zfill(2)}"
         return texto
     except:
         return datetime.now().date().isoformat()
 
 def resumir_com_gemini(titulo_original, link):
     try:
-        if not GEMINI_KEY:
-            print("SEM GEMINI_KEY")
-            return titulo_original, f"{titulo_original} agita a noite de Itapecuru Mirim e regiao!"
+        if not GEMINI_KEY or not GEMINI_KEY.startswith("AIza"):
+            return titulo_original, f"{titulo_original} agita Itapecuru Mirim!"
         genai.configure(api_key=GEMINI_KEY)
-        prompt = f"""Voce e redator do portal Itapecuru Balada (MA).
+        prompt = f"""Voce e redator do portal Itapecuru Balada - MA.
         Reescreva evitando plagio.
-        Titulo original: {titulo_original}
-        Link: {link}
-        Responda EXATAMENTE assim:
-        TITULO: novo titulo chamativo e curto
-        RESUMO: 2 paragrafos, linguagem jovem, local, sem repetir titulo
+        Titulo: {titulo_original}
+        Responda EXATAMENTE:
+        TITULO: novo titulo curto chamativo
+        RESUMO: 2 paragrafos jovem, local, sem repetir titulo
         """
-        for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash']:
+        for model_name in ['models/gemini-2.0-flash', 'models/gemini-flash-latest', 'models/gemini-2.5-flash', 'gemini-2.0-flash']:
             try:
                 model = genai.GenerativeModel(model_name)
-                response = model.generate_content(prompt)
-                texto = response.text
-                t_match = re.search(r'TITULO:\s*(.*)', texto, re.IGNORECASE)
-                r_match = re.search(r'RESUMO:\s*(.*)', texto, re.IGNORECASE | re.DOTALL)
-                novo = t_match.group(1).strip() if t_match else titulo_original
-                resumo = r_match.group(1).strip() if r_match else texto[:500]
+                r = model.generate_content(prompt)
+                texto = r.text
+                t = re.search(r'TITULO:\s*(.*)', texto, re.I)
+                res = re.search(r'RESUMO:\s*(.*)', texto, re.I | re.S)
+                novo = t.group(1).strip() if t else titulo_original
+                resumo = res.group(1).strip() if res else texto[:500]
                 print(f"Gemini OK [{model_name}]: {novo[:60]}")
                 return novo, resumo
             except Exception as e:
-                print(f"Falha modelo {model_name}: {e}")
+                print(f"Falha {model_name}: {e}")
                 continue
-        return titulo_original, f"{titulo_original} promete movimentar Itapecuru Mirim!"
+        return titulo_original, f"{titulo_original} promete movimentar Itapecuru!"
     except Exception as e:
-        print(f"Erro geral Gemini: {e}")
-        return titulo_original, f"{titulo_original} agita Itapecuru!"
+        print(f"Erro Gemini: {e}")
+        return titulo_original, f"{titulo_original} em Itapecuru Mirim!"
 
 def buscar_noticias_musica():
     try:
         print("Buscando noticias...")
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        recentes = supabase.table("noticias_musica").select("titulo, conteudo_original").order("created_at", desc=True).limit(100).execute()
-        
+        headers = {"User-Agent": "Mozilla/5.0"}
         url_feed = "https://g1.globo.com/rss/g1/pop-arte/musica/"
         r = requests.get(url_feed, headers=headers, timeout=15)
-        print(f"Status feed: {r.status_code}")
         feed = feedparser.parse(r.content)
-        print(f"Feed achou {len(feed.entries)}")
+        print(f"Feed: {len(feed.entries)} noticias")
 
-        for entry in feed.entries[:5]:
+        for entry in feed.entries[:6]:
             titulo_original = entry.title.strip()
             link_original = entry.link.strip()
 
@@ -140,47 +135,33 @@ def buscar_noticias_musica():
                 print(f"Duplicado: {titulo_original[:40]}")
                 continue
 
-            print(f"Processando: {titulo_original[:70]}")
             novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
-            
-            imagem_final = ""
-            if hasattr(entry, 'enclosures') and entry.enclosures:
-                imagem_final = entry.enclosures[0].href
-            if not imagem_final:
-                imagem_final = "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
 
-            # FONTE ORIGINAL - CORRETO PRO SEO
+            imagem_final = entry.enclosures[0].href if hasattr(entry, 'enclosures') and entry.enclosures else "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
+
             if "g1.globo.com" in link_original:
                 fonte_original = "G1"
             elif "rollingstone" in link_original.lower():
-                fonte_original = "【entity-Rolling Stone¦canonical_name=Rolling Stone】"
-            elif "【entity-gshow¦canonical_name=GShow】" in link_original:
-                fonte_original = "【entity-GShow¦canonical_name=GShow】"
+                fonte_original = " 【entity-Rolling Stone¦canonical_name=Rolling Stone】"
             else:
                 fonte_original = "G1 - Pop e Arte"
 
-            resumo_com_fonte = f"{resumo}\n\nVia: {fonte_original}"
+            resumo_final = f"{resumo}\n\nVia: {fonte_original}"
 
-            try:
-                supabase.table("noticias_musica").insert({
-                    "titulo": novo_titulo,
-                    "resumo": resumo_com_fonte,
-                    "link": "",  # SEM LINK EXTERNO
-                    "fonte": fonte_original,  # CITA ORIGINAL
-                    "imagem_url": imagem_final,
-                    "conteudo_original": link_original,
-                    "titulo_hash": f"{int(time.time())}_{random.randint(1000,9999)}"
-                }).execute()
-                print(f"SALVO: {novo_titulo[:50]}")
-                time.sleep(1)
-            except Exception as e:
-                print(f"Erro salvar: {e}")
-
-        print("Ciclo finalizado")
+            supabase.table("noticias_musica").insert({
+                "titulo": novo_titulo,
+                "resumo": resumo_final,
+                "link": "",
+                "fonte": fonte_original,
+                "imagem_url": imagem_final,
+                "conteudo_original": link_original,
+                "titulo_hash": f"{int(time.time())}_{random.randint(1000,9999)}"
+            }).execute()
+            print(f"SALVO: {novo_titulo[:50]} | Fonte: {fonte_original}")
+            time.sleep(1)
     except Exception as e:
-        print(f"Erro GERAL: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Erro buscar: {e}")
+        import traceback; traceback.print_exc()
 
 def loop_noticias():
     while True:
@@ -192,35 +173,27 @@ user_photos = {}
 
 async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await update.message.photo[-1].get_file()
-    caminho_temp = f"temp_{update.effective_user.id}.jpg"
-    await file.download_to_drive(caminho_temp)
-    user_photos[update.effective_user.id] = caminho_temp
-    await update.message.reply_text("Foto recebida! O que e?\n1 - CARTAZ DE FESTA\n2 - FOTO GALERIA\nDigite 1 ou 2")
+    caminho = f"temp_{update.effective_user.id}.jpg"
+    await file.download_to_drive(caminho)
+    user_photos[update.effective_user.id] = caminho
+    await update.message.reply_text("Foto recebida!\n1 - CARTAZ DE FESTA\n2 - FOTO GALERIA\nDigite 1 ou 2")
     return PERGUNTA_TIPO
 
 async def pergunta_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.text.strip() == "1":
-        await update.message.reply_text("Nome do evento?")
-        return NOME_EVENTO
-    else:
-        await update.message.reply_text("Seu nome / fotografo?")
-        return NOME_FOTOGRAFO
+    return NOME_EVENTO if update.message.text.strip() == "1" else NOME_FOTOGRAFO
 
 async def nome_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['nome_evento'] = update.message.text
     await update.message.reply_text("Data? ex 25/10/2026")
     return DATA_EVENTO
-
 async def data_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['data'] = update.message.text
     await update.message.reply_text("Horario? ex 22h")
     return HORARIO_EVENTO
-
 async def horario_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['horario'] = update.message.text
     await update.message.reply_text("Atracoes?")
     return ATRACOES
-
 async def atracoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['atracoes'] = update.message.text
     caminho = user_photos.get(update.effective_user.id)
@@ -231,21 +204,18 @@ async def atracoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supabase.storage.from_("fotos-publicas").upload(nome, f.read(), {"content-type":"image/jpeg","upsert":"true"})
     url = supabase.storage.from_("fotos-publicas").get_public_url(nome)
     slug = context.user_data['nome_evento'].lower().replace(" ","-")+"-"+str(int(time.time()))
-    data_iso = parse_data(context.user_data['data'])
-    supabase.table("eventos").insert({"nome": context.user_data['nome_evento'], "data_evento": data_iso, "local": f"{context.user_data['horario']} - {context.user_data['atracoes']}", "capa_url": url, "slug": slug, "status": "publicado"}).execute()
+    supabase.table("eventos").insert({"nome": context.user_data['nome_evento'], "data_evento": parse_data(context.user_data['data']), "local": f"{context.user_data['horario']} - {context.user_data['atracoes']}", "capa_url": url, "slug": slug, "status": "publicado"}).execute()
     await update.message.reply_text(f"Cartaz cadastrado! {context.user_data['nome_evento']}")
     return ConversationHandler.END
 
 async def nome_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['fotografo'] = update.message.text
-    await update.message.reply_text(f"Valeu {update.message.text}! Nome do evento?")
+    await update.message.reply_text("Nome do evento da galeria?")
     return EVENTO_GALERIA
-
 async def evento_galeria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['evento_galeria'] = update.message.text
-    await update.message.reply_text("Whatsapp? ou digite pular")
+    await update.message.reply_text("Whatsapp? ou pular")
     return WHATS_FOTOGRAFO
-
 async def whats_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     whatsapp = "" if "pular" in update.message.text.lower() else update.message.text
     caminho = user_photos.get(update.effective_user.id)
@@ -256,9 +226,8 @@ async def whats_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supabase.storage.from_("fotos-publicas").upload(nome, f.read(), {"content-type":"image/jpeg","upsert":"true"})
     url = supabase.storage.from_("fotos-publicas").get_public_url(nome)
     supabase.table("fotos").insert({"url": url, "fotografo": context.user_data['fotografo'], "evento_nome": context.user_data['evento_galeria'], "whatsapp": whatsapp, "tipo": "galeria"}).execute()
-    await update.message.reply_text(f"Foto publicada! {context.user_data['fotografo']}")
+    await update.message.reply_text("Foto publicada!")
     return ConversationHandler.END
-
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cancelado.")
     return ConversationHandler.END
@@ -269,9 +238,8 @@ async def run_bot():
             app = Application.builder().token(TELEGRAM_TOKEN).build()
             try:
                 await app.bot.delete_webhook(drop_pending_updates=True)
-                print("Webhook deletado")
-            except Exception as e:
-                print(f"Aviso webhook: {e}")
+            except:
+                pass
             conv = ConversationHandler(
                 entry_points=[MessageHandler(filters.PHOTO, handle_foto)],
                 states={
@@ -289,17 +257,12 @@ async def run_bot():
             app.add_handler(conv)
             await app.initialize()
             await app.start()
-            print("Bot polling iniciado")
             await app.updater.start_polling(drop_pending_updates=True)
-            print("Bot rodando!")
+            print("Bot OK")
             await asyncio.Event().wait()
         except Exception as e:
-            if "Conflict" in str(e):
-                print(f"Conflito, retry 10s: {e}")
-                await asyncio.sleep(10)
-            else:
-                print(f"Erro bot: {e}")
-                await asyncio.sleep(5)
+            print(f"Erro bot: {e}")
+            await asyncio.sleep(10 if "Conflict" in str(e) else 5)
 
 def start_bot_thread():
     loop = asyncio.new_event_loop()
