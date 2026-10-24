@@ -2,13 +2,7 @@ import Header from '@/components/Header';
 import MundoMusicaSection from '@/components/MundoMusicaSection';
 import GaleriasSection from '@/components/GaleriasSection';
 import EventosProximos from '@/components/EventosProximos';
-
 import ChartsSection from '@/components/ChartsSection'
-
-<EventosProximos />
-<ChartsSection />
-<MundoMusicaSection />
-<GaleriasSection />
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,6 +11,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black">
       <Header />
+      
       {/* Hero */}
       <section className="relative h- md:h- overflow-hidden">
         <img src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600" className="absolute inset-0 w-full h-full object-cover" alt="" />
@@ -30,11 +25,11 @@ export default function Home() {
             <button className="mt-6 bg-white text-black font-black uppercase px-6 py-3 rounded-full text-sm hover:bg-[#0A84FF] hover:text-white transition">Ver Galeria Completa</button>
           </div>
         </div>
-        {/* Ad Top */}
         <div className="absolute top-4 right-4 hidden lg:flex bg-white/10 backdrop-blur border border-dashed border-white/20 rounded-lg h- w- items-center justify-center text-xs text-white/50">Espaço Anunciante - Leaderboard 728x90</div>
       </section>
 
       <EventosProximos />
+      <ChartsSection />
       <MundoMusicaSection />
       <GaleriasSection />
 
