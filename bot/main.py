@@ -70,9 +70,14 @@ def parse_data(texto):
 def resumir_com_gemini(titulo_original, link):
     try:
         if not GEMINI_KEY:
-            return titulo_original, f"{titulo_original} agita Itapecuru!"
+            return titulo_original, f"{titulo_original} agita Itapecuru Mirim e regiao!"
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"Reescreva para evitar plagio - Portal Itapecuru Balada. Titulo: {titulo_original} Link: {link}. Responda: TITULO: novo titulo RESUMO: resumo 2 paragrafos jovem"
+        prompt = f"""Reescreva para evitar plagio - Portal Itapecuru Balada. 
+        Titulo original: {titulo_original} 
+        Link: {link}
+        Responda no formato:
+        TITULO: novo titulo chamativo
+        RESUMO: resumo 2 paragrafos jovem, estilo Itapecuru Balada"""
         response = model.generate_content(prompt)
         texto = response.text
         t_match = re.search(r'TITULO:\s*(.*)', texto)
@@ -82,71 +87,73 @@ def resumir_com_gemini(titulo_original, link):
         return novo, resumo
     except Exception as e:
         print(f"Erro Gemini: {e}")
-        return titulo_original, f"{titulo_original} promete movimentar Itapecuru!"
+        return titulo_original, f"{titulo_original} promete movimentar a noite de Itapecuru!"
 
 def buscar_noticias_musica():
     try:
         print("Buscando noticias com requests...")
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        recentes = supabase.table("noticias_musica").select("titulo, link").order("created_at", desc=True).limit(50).execute()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        recentes = supabase.table("noticias_musica").select("titulo, link, conteudo_original").order("created_at", desc=True).limit(50).execute()
         titulos_recentes = [r['titulo'] for r in recentes.data] if recentes.data else []
-        links_recentes = [r['link'] for r in recentes.data] if recentes.data else []
+        links_originais = [r['conteudo_original'] for r in recentes.data] if recentes.data else []
         
         url_feed = "https://g1.globo.com/rss/g1/pop-arte/musica/"
         r = requests.get(url_feed, headers=headers, timeout=15)
-        print(f"Status feed: {r.status_code} tamanho: {len(r.content)}")
+        print(f"Status feed: {r.status_code}")
         feed = feedparser.parse(r.content)
-        print(f"Feed parse achou {len(feed.entries)} entradas")
+        print(f"Feed achou {len(feed.entries)} noticias")
 
-        count = 0
         for entry in feed.entries[:5]:
             titulo_original = entry.title.strip()
             link_original = entry.link.strip()
-            print(f"Processando: {titulo_original[:60]}")
-
-            if link_original in links_recentes:
-                print(" -> Link ja existe, pulando")
+            
+            # Evita duplicado pelo conteudo_original (link original)
+            if titulo_original in links_originais or link_original in [d.get('conteudo_original') for d in recentes.data or []]:
+                continue
+            # Verifica se já existe esse link original no conteudo_original
+            check = supabase.table("noticias_musica").select("id").eq("conteudo_original", link_original).execute()
+            if check.data:
+                print(f"Ja existe: {titulo_original[:40]}")
                 continue
 
+            print(f"Processando: {titulo_original[:60]}")
             novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
             
             imagem_final = ""
             if hasattr(entry, 'enclosures') and entry.enclosures:
                 imagem_final = entry.enclosures[0].href
-            
             if not imagem_final:
                 imagem_final = "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
 
+            # CORREÇÃO DA FONTE - CITA ORIGINAL
+            if "g1.globo.com" in link_original:
+                fonte_original = "G1"
+            elif "rollingstone" in link_original.lower():
+                fonte_original = "【entity-Rolling Stone¦canonical_name=Rolling Stone】"
+            elif "【entity-gshow¦canonical_name=GShow】" in link_original:
+                fonte_original = "【entity-GShow¦canonical_name=GShow】"
+            elif "【entity-uol¦canonical_name=UOL】" in link_original:
+                fonte_original = "【entity-UOL¦canonical_name=UOL】"
+            else:
+                fonte_original = "G1 - Pop e Arte"
+
+            resumo_com_fonte = f"{resumo}\n\nVia: {fonte_original}"
+
             try:
-                print(f"Salvando: {novo_titulo[:50]}")
+                print(f"Salvando: {novo_titulo[:50]} | Fonte: {fonte_original}")
                 result = supabase.table("noticias_musica").insert({
                     "titulo": novo_titulo,
-                    "resumo": resumo,
-                    "link": link_original,
-                    "fonte": "Itapecuru Balada",
+                    "resumo": resumo_com_fonte,
+                    "link": "",  # SEM LINK EXTERNO PRA NAO PERDER SEO
+                    "fonte": fonte_original,  # CITA A FONTE ORIGINAL
                     "imagem_url": imagem_final,
-                    "conteudo_original": titulo_original,
+                    "conteudo_original": link_original,  # Guarda o link original aqui, escondido
                     "titulo_hash": f"{int(time.time())}_{random.randint(1000,9999)}"
                 }).execute()
-                print(f"SALVO OK: {result.data}")
-                titulos_recentes.append(novo_titulo)
-                links_recentes.append(link_original)
-                count += 1
+                print(f"SALVO OK")
+                time.sleep(1)
             except Exception as e:
-                print(f"Erro salvar Supabase: {e}")
-
-        if count == 0 and len(feed.entries) == 0:
-            print("Feed vazio! Inserindo noticia teste")
-            supabase.table("noticias_musica").insert({
-                "titulo": f"Musica do momento em Itapecuru - {int(time.time())}",
-                "resumo": "As musicas que estao bombando na noite de Itapecuru Mirim e regiao. Confira os hits!",
-                "link": "https://itapecuru-balada.vercel.app",
-                "fonte": "Itapecuru Balada",
-                "imagem_url": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f",
-                "conteudo_original": f"teste_{int(time.time())}",
-                "titulo_hash": f"teste_{int(time.time())}"
-            }).execute()
-            print("Noticia teste inserida")
+                print(f"Erro salvar: {e}")
 
         print("Ciclo finalizado")
     except Exception as e:
@@ -236,32 +243,42 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def run_bot():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    try:
-        await app.bot.delete_webhook(drop_pending_updates=True)
-        print("Webhook deletado")
-    except Exception as e:
-        print(f"Aviso: {e}")
-    conv = ConversationHandler(
-        entry_points=[MessageHandler(filters.PHOTO, handle_foto)],
-        states={
-            PERGUNTA_TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pergunta_tipo)],
-            NOME_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nome_evento)],
-            DATA_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, data_evento)],
-            HORARIO_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, horario_evento)],
-            ATRACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, atracoes)],
-            NOME_FOTOGRAFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nome_fotografo)],
-            EVENTO_GALERIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, evento_galeria)],
-            WHATS_FOTOGRAFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, whats_fotografo)],
-        },
-        fallbacks=[MessageHandler(filters.COMMAND, cancel)]
-    )
-    app.add_handler(conv)
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
-    print("Bot rodando!")
-    await asyncio.Event().wait()
+    while True:
+        try:
+            app = Application.builder().token(TELEGRAM_TOKEN).build()
+            try:
+                await app.bot.delete_webhook(drop_pending_updates=True)
+                print("✅ Webhook deletado - fila limpa")
+            except Exception as e:
+                print(f"Aviso webhook: {e}")
+            conv = ConversationHandler(
+                entry_points=[MessageHandler(filters.PHOTO, handle_foto)],
+                states={
+                    PERGUNTA_TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pergunta_tipo)],
+                    NOME_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nome_evento)],
+                    DATA_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, data_evento)],
+                    HORARIO_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, horario_evento)],
+                    ATRACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, atracoes)],
+                    NOME_FOTOGRAFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nome_fotografo)],
+                    EVENTO_GALERIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, evento_galeria)],
+                    WHATS_FOTOGRAFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, whats_fotografo)],
+                },
+                fallbacks=[MessageHandler(filters.COMMAND, cancel)]
+            )
+            app.add_handler(conv)
+            await app.initialize()
+            await app.start()
+            print("🤖 Bot iniciando polling...")
+            await app.updater.start_polling(drop_pending_updates=True)
+            print("🤖 Bot rodando sem conflito!")
+            await asyncio.Event().wait()
+        except Exception as e:
+            if "Conflict" in str(e):
+                print(f"⚠️ Conflito, tentando em 10s: {e}")
+                await asyncio.sleep(10)
+            else:
+                print(f"Erro bot: {e}")
+                await asyncio.sleep(5)
 
 def start_bot_thread():
     loop = asyncio.new_event_loop()
