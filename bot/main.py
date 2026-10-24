@@ -1,258 +1,127 @@
 import os
-import asyncio
-import threading
-import time
-import random
-import requests
 import re
-from flask import Flask
-from supabase import create_client
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes, ConversationHandler
-from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime
+import time
 import feedparser
-from google import genai as genai_new
+import google.generativeai as genai
+from fastapi import FastAPI
+from supabase import create_client, Client
+from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
 
+# ENV
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-gemini_client = genai_new.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 
-flask_app = Flask(__name__)
+app = FastAPI()
 
-@flask_app.route("/")
-def health():
-    return "Bot OK - Gemini 2.5 Flash - Sem Itapecuru"
+# Modelo que você já tem liberado
+MODEL = "gemini-2.5-flash"
+model = genai.GenerativeModel(MODEL)
 
-@flask_app.route("/forcar-noticias")
+RSS_G1_MUSICA = "https://g1.globo.com/rss/g1/musica/"
+
+def limpar_texto(texto: str) -> str:
+    # REMOVE qualquer menção que o Gemini inventar de Itapecuru
+    texto = re.sub(r'(?i)itapecuru.*?(mirim|baladas)?', '', texto)
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto
+
+def extrair_imagem(link: str) -> str:
+    try:
+        r = requests.get(link, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(r.text, "html.parser")
+        og = soup.find("meta", property="og:image")
+        if og and og.get("content"):
+            return og["content"]
+    except:
+        pass
+    return "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800"
+
+def gerar_resumo_com_gemini(titulo_original: str, descricao_original: str):
+    prompt = f"""
+Você é editor do portal Itapecuru Baladas, mas está escrevendo sobre música NACIONAL.
+Tarefa: reescreva a notícia abaixo SEM adicionar cidade.
+
+TÍTULO ORIGINAL: {titulo_original}
+DESCRIÇÃO: {descricao_original}
+
+Regras OBRIGATÓRIAS:
+1. NÃO adicione "Itapecuru-Mirim", "Itapecuru", "Maranhão" ou qualquer cidade.
+2. Título: reescreva curto, até 90 caracteres, chamativo, SEM cidade.
+3. Resumo: 2 frases, até 180 caracteres, explicando a notícia, SEM "Confira os detalhes..." e SEM cidade.
+4. Retorne APENAS JSON: {{"titulo": "...", "resumo": "..."}}
+
+Exemplo: {{"titulo": "【entity-Oswaldo Montenegro¦canonical_name=Oswaldo Montenegro】 celebra 70 anos com turnê", "resumo": "Cantor revisita clássicos e apresenta músicas novas em shows pelo Brasil. Turnê passa por várias capitais."}}
+"""
+    try:
+        resp = model.generate_content(prompt)
+        text = resp.text.strip()
+        # limpa ```json
+        text = re.sub(r'```json|```', '', text).strip()
+        import json
+        data = json.loads(text)
+        titulo = limpar_texto(data.get("titulo", titulo_original))[:120]
+        resumo = limpar_texto(data.get("resumo", descricao_original))[:250]
+        # garante que não são iguais
+        if titulo == resumo:
+            resumo = resumo[:120] + "..."
+        return titulo, resumo
+    except Exception as e:
+        print(f"Erro Gemini: {e} - usando original")
+        return limpar_texto(titulo_original)[:90], limpar_texto(descricao_original)[:180]
+
+def buscar_e_salvar_noticias():
+    feed = feedparser.parse(RSS_G1_MUSICA)
+    salvas = 0
+    for entry in feed.entries[:6]:
+        link_real = entry.link
+        titulo_orig = entry.title
+        desc_orig = entry.get("summary", "")[:300]
+
+        # verifica se já existe
+        existe = supabase.table("noticias_musica").select("id").eq("link", link_real).execute()
+        if len(existe.data) > 0:
+            continue
+        existe2 = supabase.table("noticias_musica").select("id").eq("conteudo_original", link_real).execute()
+        if len(existe2.data) > 0:
+            continue
+
+        titulo, resumo = gerar_resumo_com_gemini(titulo_orig, desc_orig)
+        imagem = extrair_imagem(link_real)
+
+        print(f"Salvando: {titulo} -> {link_real}")
+
+        supabase.table("noticias_musica").insert({
+            "titulo": titulo,
+            "resumo": resumo,
+            "link": link_real,  # NUNCA EMPTY!
+            "conteudo_original": link_real,
+            "fonte": "G1",
+            "imagem_url": imagem,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        salvas += 1
+        time.sleep(1) # evita rate limit
+
+    return salvas
+
+@app.get("/")
+def home():
+    return {"status": "bot online", "model": MODEL}
+
+@app.get("/forcar-noticias")
 def forcar_noticias():
     try:
-        buscar_noticias_musica()
-        data = supabase.table("noticias_musica").select("*").order("created_at", desc=True).limit(3).execute()
-        return {"status": "rodou", "total": len(data.data), "noticias": data.data}
+        total = buscar_e_salvar_noticias()
+        return {"status": "rodou", "total": total, "model": MODEL}
     except Exception as e:
-        return {"erro": str(e)}
+        return {"status": "erro", "erro": str(e)}
 
-@flask_app.route("/test-gemini")
-def test_gemini():
-    try:
-        if not gemini_client:
-            return {"ok": False, "erro": "SEM KEY"}
-        resp = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Diga: Gemini 2.5 OK"
-        )
-        return {"ok": True, "modelo": "gemini-2.5-flash", "resposta": resp.text}
-    except Exception as e:
-        return {"ok": False, "erro": str(e)[:800]}
-
-def aplica_marca_dagua(caminho):
-    img = Image.open(caminho).convert("RGB")
-    w, h = img.size
-    barra = 140
-    nova = Image.new("RGB", (w, h+barra), (0,0,0))
-    nova.paste(img, (0,0))
-    draw = ImageDraw.Draw(nova)
-    font = ImageFont.load_default()
-    draw.text((20, h-40), "ITAPECURU BALADA", font=font, fill=(255,255,255))
-    draw.text((20, h+10), "@itapecurubalada.com.br", font=font, fill=(255,255,255))
-    draw.text((w-200, h+10), "PUBLICIDADE", font=font, fill=(255,255,0))
-    return nova
-
-def parse_data(texto):
-    try:
-        p = texto.split("/")
-        return f"{p[2]}-{p[1].zfill(2)}-{p[0].zfill(2)}"
-    except:
-        return datetime.now().date().isoformat()
-
-def resumir_com_gemini(titulo_original, link):
-    try:
-        if not gemini_client:
-            return titulo_original, titulo_original
-
-        prompt = f"""
-        Reescreva essa notícia musical evitando plágio.
-        PROIBIDO mencionar Itapecuru, Itapecuru Mirim, Maranhão, cidade ou região.
-        Fale SOMENTE da música e do artista.
-
-        Título: {titulo_original}
-
-        Responda EXATAMENTE:
-        TITULO: novo título curto chamativo
-        RESUMO: 2 parágrafos sobre a música, sem cidade
-        """
-        resp = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        texto = resp.text
-        t = re.search(r'TITULO:\s*(.*)', texto, re.I)
-        r_match = re.search(r'RESUMO:\s*(.*)', texto, re.I | re.S)
-        novo = t.group(1).strip() if t else titulo_original
-        resumo = r_match.group(1).strip() if r_match else texto[:600]
-
-        for palavra in ["Itapecuru Mirim", "Itapecuru", "no Maranhão", "do Maranhão", "promete movimentar", "agita Itapecuru"]:
-            resumo = resumo.replace(palavra, "")
-        resumo = re.sub(r'\s+', ' ', resumo).strip()
-
-        print(f"Gemini 2.5 OK: {novo[:60]}")
-        return novo, resumo
-    except Exception as e:
-        print(f"Erro Gemini 2.5: {e}")
-        return titulo_original, titulo_original
-
-def buscar_noticias_musica():
-    try:
-        print("Buscando noticias...")
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get("https://g1.globo.com/rss/g1/pop-arte/musica/", headers=headers, timeout=15)
-        feed = feedparser.parse(r.content)
-        print(f"Feed: {len(feed.entries)}")
-
-        for entry in feed.entries[:6]:
-            titulo_original = entry.title.strip()
-            link_original = entry.link.strip()
-
-            check = supabase.table("noticias_musica").select("id").eq("conteudo_original", link_original).execute()
-            if check.data:
-                continue
-
-            print(f"Processando: {titulo_original[:70]}")
-            novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
-
-            imagem_final = entry.enclosures[0].href if hasattr(entry, 'enclosures') and entry.enclosures else "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
-            fonte_original = "G1" if "g1.globo" in link_original else "G1 - Pop e Arte"
-            resumo_final = f"{resumo}\n\nVia: {fonte_original}"
-
-            supabase.table("noticias_musica").insert({
-                "titulo": novo_titulo,
-                "resumo": resumo_final,
-                "link": "",
-                "fonte": fonte_original,
-                "imagem_url": imagem_final,
-                "conteudo_original": link_original,
-                "titulo_hash": f"{int(time.time())}_{random.randint(1000,9999)}"
-            }).execute()
-            print(f"SALVO: {novo_titulo[:50]}")
-            time.sleep(1)
-    except Exception as e:
-        print(f"Erro buscar: {e}")
-        import traceback; traceback.print_exc()
-
-def loop_noticias():
-    while True:
-        buscar_noticias_musica()
-        time.sleep(10800)
-
-PERGUNTA_TIPO, NOME_EVENTO, DATA_EVENTO, HORARIO_EVENTO, ATRACOES, NOME_FOTOGRAFO, EVENTO_GALERIA, WHATS_FOTOGRAFO = range(8)
-user_photos = {}
-
-async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = await update.message.photo[-1].get_file()
-    caminho = f"temp_{update.effective_user.id}.jpg"
-    await file.download_to_drive(caminho)
-    user_photos[update.effective_user.id] = caminho
-    await update.message.reply_text("Foto recebida!\n1 - CARTAZ DE FESTA\n2 - FOTO GALERIA")
-    return PERGUNTA_TIPO
-
-async def pergunta_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return NOME_EVENTO if update.message.text.strip() == "1" else NOME_FOTOGRAFO
-
-async def nome_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['nome_evento'] = update.message.text
-    await update.message.reply_text("Data? ex 25/10/2026")
-    return DATA_EVENTO
-async def data_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['data'] = update.message.text
-    await update.message.reply_text("Horario?")
-    return HORARIO_EVENTO
-async def horario_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['horario'] = update.message.text
-    await update.message.reply_text("Atracoes?")
-    return ATRACOES
-async def atracoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['atracoes'] = update.message.text
-    final = aplica_marca_dagua(user_photos.get(update.effective_user.id))
-    final.save("final.jpg")
-    nome = f"cartaz_{int(time.time())}.jpg"
-    with open("final.jpg","rb") as f:
-        supabase.storage.from_("fotos-publicas").upload(nome, f.read(), {"content-type":"image/jpeg","upsert":"true"})
-    url = supabase.storage.from_("fotos-publicas").get_public_url(nome)
-    slug = context.user_data['nome_evento'].lower().replace(" ","-")+"-"+str(int(time.time()))
-    supabase.table("eventos").insert({"nome": context.user_data['nome_evento'], "data_evento": parse_data(context.user_data['data']), "local": f"{context.user_data['horario']} - {context.user_data['atracoes']}", "capa_url": url, "slug": slug, "status": "publicado"}).execute()
-    await update.message.reply_text("Cartaz cadastrado!")
-    return ConversationHandler.END
-
-async def nome_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['fotografo'] = update.message.text
-    await update.message.reply_text("Nome do evento?")
-    return EVENTO_GALERIA
-async def evento_galeria(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['evento_galeria'] = update.message.text
-    await update.message.reply_text("Whatsapp? ou pular")
-    return WHATS_FOTOGRAFO
-async def whats_fotografo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    whatsapp = "" if "pular" in update.message.text.lower() else update.message.text
-    final = aplica_marca_dagua(user_photos.get(update.effective_user.id))
-    final.save("final.jpg")
-    nome = f"galeria_{int(time.time())}.jpg"
-    with open("final.jpg","rb") as f:
-        supabase.storage.from_("fotos-publicas").upload(nome, f.read(), {"content-type":"image/jpeg","upsert":"true"})
-    url = supabase.storage.from_("fotos-publicas").get_public_url(nome)
-    supabase.table("fotos").insert({"url": url, "fotografo": context.user_data['fotografo'], "evento_nome": context.user_data['evento_galeria'], "whatsapp": whatsapp, "tipo": "galeria"}).execute()
-    await update.message.reply_text("Foto publicada!")
-    return ConversationHandler.END
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Cancelado.")
-    return ConversationHandler.END
-
-async def run_bot():
-    await asyncio.sleep(10)
-    while True:
-        try:
-            app = Application.builder().token(TELEGRAM_TOKEN).build()
-            await app.bot.delete_webhook(drop_pending_updates=True)
-            await asyncio.sleep(2)
-            try:
-                await app.bot.get_updates(offset=-1, timeout=1)
-            except:
-                pass
-            conv = ConversationHandler(
-                entry_points=[MessageHandler(filters.PHOTO, handle_foto)],
-                states={
-                    PERGUNTA_TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pergunta_tipo)],
-                    NOME_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nome_evento)],
-                    DATA_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, data_evento)],
-                    HORARIO_EVENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, horario_evento)],
-                    ATRACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, atracoes)],
-                    NOME_FOTOGRAFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nome_fotografo)],
-                    EVENTO_GALERIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, evento_galeria)],
-                    WHATS_FOTOGRAFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, whats_fotografo)],
-                },
-                fallbacks=[MessageHandler(filters.COMMAND, cancel)]
-            )
-            app.add_handler(conv)
-            await app.initialize()
-            await app.start()
-            await app.updater.start_polling(drop_pending_updates=True)
-            print("Bot rodando!")
-            await asyncio.Event().wait()
-        except Exception as e:
-            print(f"Erro bot: {e}")
-            await asyncio.sleep(20 if "Conflict" in str(e) else 5)
-
-def start_bot_thread():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(run_bot())
-
-if __name__ == "__main__":
-    threading.Thread(target=loop_noticias, daemon=True).start()
-    threading.Thread(target=start_bot_thread, daemon=True).start()
-    port = int(os.environ.get("PORT", 10000))
-    flask_app.run(host="0.0.0.0", port=port)
+@app.get("/health")
+def health():
+    return {"ok": True}
