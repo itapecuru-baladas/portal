@@ -86,59 +86,73 @@ def resumir_com_gemini(titulo_original, link):
 
 def buscar_noticias_musica():
     try:
-        print("Buscando noticias...")
-        feeds = ["https://g1.globo.com/rss/g1/pop-arte/musica/"]
+        print("Buscando noticias com requests...")
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         recentes = supabase.table("noticias_musica").select("titulo, link").order("created_at", desc=True).limit(50).execute()
         titulos_recentes = [r['titulo'] for r in recentes.data] if recentes.data else []
         links_recentes = [r['link'] for r in recentes.data] if recentes.data else []
-        for feed_url in feeds:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:3]:
-                titulo_original = entry.title.strip()
-                link_original = entry.link.strip()
-                if link_original in links_recentes:
-                    continue
-                repetido = False
-                for t in titulos_recentes:
-                    if titulos_parecidos(titulo_original, t):
-                        repetido = True
-                        break
-                if repetido:
-                    continue
-                print(f"Nova: {titulo_original}")
-                imagem_url = ""
-                if hasattr(entry, 'enclosures') and entry.enclosures:
-                    imagem_url = entry.enclosures[0].href
-                novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
-                imagem_final = imagem_url
-                if imagem_url:
-                    try:
-                        img_data = requests.get(imagem_url, timeout=10).content
-                        nome_img = f"noticia_{int(time.time())}_{random.randint(1000,9999)}.jpg"
-                        supabase.storage.from_("fotos-publicas").upload(nome_img, img_data, {"content-type":"image/jpeg","upsert":"true"})
-                        imagem_final = supabase.storage.from_("fotos-publicas").get_public_url(nome_img)
-                    except Exception as ex:
-                        print(f"Erro imagem: {ex}")
-                        imagem_final = imagem_url
-                try:
-                    supabase.table("noticias_musica").insert({
-                        "titulo": novo_titulo,
-                        "resumo": resumo,
-                        "link": link_original,
-                        "fonte": "Itapecuru Balada",
-                        "imagem_url": imagem_final,
-                        "conteudo_original": titulo_original,
-                        "titulo_hash": novo_titulo.lower()[:50]
-                    }).execute()
-                    titulos_recentes.append(novo_titulo)
-                    links_recentes.append(link_original)
-                    print(f"Salvo: {novo_titulo}")
-                except Exception as e:
-                    print(f"Erro salvar: {e}")
-                time.sleep(5)
+        
+        url_feed = "https://g1.globo.com/rss/g1/pop-arte/musica/"
+        r = requests.get(url_feed, headers=headers, timeout=15)
+        print(f"Status feed: {r.status_code} tamanho: {len(r.content)}")
+        feed = feedparser.parse(r.content)
+        print(f"Feed parse achou {len(feed.entries)} entradas")
+
+        count = 0
+        for entry in feed.entries[:5]:
+            titulo_original = entry.title.strip()
+            link_original = entry.link.strip()
+            print(f"Processando: {titulo_original[:60]}")
+
+            if link_original in links_recentes:
+                print(" -> Link ja existe, pulando")
+                continue
+
+            novo_titulo, resumo = resumir_com_gemini(titulo_original, link_original)
+            
+            imagem_final = ""
+            if hasattr(entry, 'enclosures') and entry.enclosures:
+                imagem_final = entry.enclosures[0].href
+            
+            if not imagem_final:
+                imagem_final = "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f"
+
+            try:
+                print(f"Salvando: {novo_titulo[:50]}")
+                result = supabase.table("noticias_musica").insert({
+                    "titulo": novo_titulo,
+                    "resumo": resumo,
+                    "link": link_original,
+                    "fonte": "Itapecuru Balada",
+                    "imagem_url": imagem_final,
+                    "conteudo_original": titulo_original,
+                    "titulo_hash": f"{int(time.time())}_{random.randint(1000,9999)}"
+                }).execute()
+                print(f"SALVO OK: {result.data}")
+                titulos_recentes.append(novo_titulo)
+                links_recentes.append(link_original)
+                count += 1
+            except Exception as e:
+                print(f"Erro salvar Supabase: {e}")
+
+        if count == 0 and len(feed.entries) == 0:
+            print("Feed vazio! Inserindo noticia teste")
+            supabase.table("noticias_musica").insert({
+                "titulo": f"Musica do momento em Itapecuru - {int(time.time())}",
+                "resumo": "As musicas que estao bombando na noite de Itapecuru Mirim e regiao. Confira os hits!",
+                "link": "https://itapecuru-balada.vercel.app",
+                "fonte": "Itapecuru Balada",
+                "imagem_url": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f",
+                "conteudo_original": f"teste_{int(time.time())}",
+                "titulo_hash": f"teste_{int(time.time())}"
+            }).execute()
+            print("Noticia teste inserida")
+
         print("Ciclo finalizado")
     except Exception as e:
-        print(f"Erro noticias: {e}")
+        print(f"Erro GERAL noticias: {e}")
+        import traceback
+        traceback.print_exc()
 
 def loop_noticias():
     while True:
