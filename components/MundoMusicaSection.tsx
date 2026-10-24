@@ -1,35 +1,84 @@
-"use client"
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+"use client";
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+
+type Noticia = {
+  id: string;
+  titulo: string;
+  resumo: string;
+  link: string;
+  imagem_url: string;
+  fonte: string;
+  created_at: string;
+};
 
 export default function MundoMusicaSection() {
-  const [noticias, setNoticias] = useState<any[]>([])
+  const cats = ["Todos","Sertanejo","Forró","Piseiro","Pop","Eletrônico","Brega","Pagode"];
+  const [active, setActive] = useState("Todos");
+  const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    supabase.from("noticias_musica").select("*").order("created_at",{ascending:false}).limit(6).then(({data})=>setNoticias(data||[]))
-  }, [])
+    async function fetchNoticias() {
+      const { data, error } = await supabase
+        .from("noticias_musica")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(12);
+      
+      if (error) {
+        console.error("Erro buscar noticias:", error);
+      } else if (data) {
+        setNoticias(data as Noticia[]);
+      }
+      setLoading(false);
+    }
+    fetchNoticias();
+  }, []);
+
+  if (loading) {
+    return (
+      <section id="musica" className="bg-[#0A0A0A] py-10">
+        <div className="max-w-7xl mx-auto px-4 text-white/50">Carregando notícias...</div>
+      </section>
+    );
+  }
+
+  const filtered = noticias; // depois filtra por categoria se quiser
+
   return (
-    <section className="py-12 bg-zinc-950">
+    <section id="musica" className="bg-[#0A0A0A] py-10 border-y border-white/5">
       <div className="max-w-7xl mx-auto px-4">
-        <h2 className="text-3xl font-black italic uppercase mb-8">MUNDO DA MÚSICA • BRASIL E MUNDO</h2>
-        <div className="grid md:grid-cols-3 gap-6">
-          {noticias.length===0 ? <p className="text-zinc-500">Carregando...</p> :
-          noticias.map((n:any)=>{
-            const linkReal = n.conteudo_original || n.link
-            const resumoLimpo = n.resumo?.split("Via:")[0] || ""
-            return (
-              <a key={n.id} href={linkReal} target="_blank" className="bg-zinc-900 rounded-xl overflow-hidden hover:scale-105 transition block">
-                <img src={n.imagem_url || "https://picsum.photos/400/300"} className="w-full h-48 object-cover"/>
-                <div className="p-4">
-                  <span className="text-xs bg-blue-600 px-2 py-1 rounded-full uppercase">{n.fonte || "G1"}</span>
-                  <h3 className="font-bold mt-2 line-clamp-2">{n.titulo}</h3>
-                  <p className="text-sm text-zinc-400 mt-2 line-clamp-3">{resumoLimpo}</p>
-                  <p className="text-xs text-zinc-500 mt-2">Via: {n.fonte}</p>
-                </div>
-              </a>
-            )
-          })}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-black italic uppercase">Mundo da <span className="text-[#0A84FF]">Música</span></h2>
+            <p className="text-white/60 text-sm mt-1">Fique por dentro de tudo que rola - de forró a eletrônico</p>
+          </div>
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            {cats.map(c=>(
+              <button key={c} onClick={()=>setActive(c)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold uppercase border ${active===c ? 'bg-gradient-to-r from-[#0A84FF] to-[#0066FF] border-[#0A84FF] text-white' : 'border-white/20 text-white/60 hover:border-white/40'}`}>{c}</button>
+            ))}
+          </div>
         </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {filtered.map((n,i)=>(
+            <a key={n.id || i} href={n.link} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-2xl overflow-hidden border border-white/10 group cursor-pointer hover:border-[#0A84FF]/40 block">
+              <div className="relative h-44">
+                <img src={n.imagem_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600"} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt={n.titulo} />
+                <span className="absolute top-3 left-3 bg-black/70 backdrop-blur text- font-black px-2 py-1 rounded-full border border-white/20">{n.fonte || "G1"}</span>
+              </div>
+              <div className="p-4">
+                <p className="text- text-white/50 mb-2">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
+                <h3 className="font-bold leading-tight line-clamp-2 text-white">{n.titulo}</h3>
+                <p className="text-xs text-white/50 mt-2 line-clamp-2">{n.resumo}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+        {filtered.length === 0 && (
+          <p className="text-white/50 text-center py-10">Nenhuma notícia ainda. O bot vai buscar em breve.</p>
+        )}
       </div>
     </section>
-  )
+  );
 }
