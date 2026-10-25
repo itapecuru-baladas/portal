@@ -1,6 +1,4 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-body { background: #000; color: #fff; font-family: 'Montserrat', system-ui, sans-serif; }
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+body { background: #000; color: #fff; }

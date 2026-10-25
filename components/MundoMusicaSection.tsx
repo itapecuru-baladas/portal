@@ -4,78 +4,76 @@ import { useState, useEffect } from 'react';
 type Noticia = {
   id: string;
   titulo: string;
-  resumo: string;
-  categoria?: string;
-  link?: string;
-  link_externo?: string;
-  imagem_url: string;
-  fonte: string;
-  created_at: string;
+  resumo?: string;
+  categoria: string;
+  link: string;
+  imagem_url?: string;
+  fonte?: string;
+  created_at?: string;
 };
 
+const CATEGORIAS = ["TODOS","SERTANEJO","FORRÓ","PISEIRO","POP","ELETRÔNICO","BREGA","PAGODE"];
+
 export default function MundoMusicaSection() {
-  const cats = ["Todos","Sertanejo","Forró","Piseiro","Pop","Eletrônico","Brega","Pagode"];
-  const [active, setActive] = useState("Todos");
   const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [filtro, setFiltro] = useState("TODOS");
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchNoticias() {
-      setLoading(true);
+    async function load() {
       try {
+        setLoading(true);
         const res = await fetch('/api/noticias', { cache: 'no-store' });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          const unicas = Array.from(new Map(data.map((n:any) => [n.link, n])).values()) as Noticia[];
-          const filtradas = active === "Todos" ? unicas : unicas.filter(n => (n.categoria||"").toLowerCase().includes(active.toLowerCase()));
-          setNoticias(filtradas);
-        }
-      } catch (e) {
-        console.error(e);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Erro buscar noticias');
+        // se for debug {data: [...]}, pega data
+        const arr = Array.isArray(json) ? json : json.data || [];
+        // deduplica por link
+        const uniq = Array.from(new Map(arr.map((n:any)=>[n.link, n])).values());
+        setNoticias(uniq);
+      } catch (e:any) {
+        setErro(e.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
-    fetchNoticias();
-  }, [active]);
+    load();
+  }, []);
 
-  if (loading) {
-    return (
-      <section id="musica" className="bg-[#0A0A0A] py-10 border-y border-white/5">
-        <div className="max-w-7xl mx-auto px-4 text-white/50">Carregando...</div>
-      </section>
-    );
-  }
+  const filtradas = filtro === "TODOS" ? noticias : noticias.filter(n => n.categoria?.toUpperCase() === filtro);
 
   return (
-    <section id="musica" className="bg-[#0A0A0A] py-10 border-y border-white/5">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+    <section className="bg-[#111] text-white py-10 px-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h2 className="text-3xl md:text-4xl font-black italic uppercase">Mundo da <span className="text-[#0A84FF]">Música</span></h2>
+            <h2 className="text-4xl font-black italic">MUNDO DA <span className="text-[#008CFF]">MÚSICA</span></h2>
+            <p className="text-zinc-400 text-sm mt-1">Fique por dentro de tudo que rola - de forró a eletrônico</p>
           </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {cats.map(c=>(
-              <button key={c} onClick={()=>setActive(c)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold uppercase border ${active===c ? 'bg-gradient-to-r from-[#0A84FF] to-[#0066FF] border-[#0A84FF] text-white' : 'border-white/20 text-white/60'}`}>{c}</button>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIAS.map(cat => (
+              <button key={cat} onClick={()=>setFiltro(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold border ${filtro===cat ? 'bg-[#008CFF] border-[#008CFF] text-white' : 'border-zinc-700 text-zinc-400 hover:border-white'}`}>{cat}</button>
             ))}
           </div>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {noticias.map((n,i)=>{
-            const url = n.link || n.link_externo || "#";
-            return (
-              <a key={n.id || i} href={url} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-2xl overflow-hidden border border-white/10 group block">
-                <div className="relative h-44">
-                  <img src={n.imagem_url} className="w-full h-full object-cover" alt={n.titulo} />
-                  <span className="absolute top-3 left-3 bg-black/70 text- font-black px-2 py-1 rounded-full">{(n.fonte||"G1").toUpperCase()}</span>
-                </div>
-                <div className="p-4">
-                  <p className="text- text-white/50 mb-2">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
-                  <h3 className="font-bold leading-tight line-clamp-2 text-white">{n.titulo}</h3>
-                  <p className="text-xs text-white/50 mt-2 line-clamp-2">{n.resumo}</p>
-                </div>
-              </a>
-            );
-          })}
+
+        {loading && <p className="text-center text-zinc-500 py-20">Carregando notícias...</p>}
+        {erro && <p className="text-center text-red-400 py-20">Erro: {erro} - Verifique /api/noticias</p>}
+        {!loading && !erro && filtradas.length === 0 && <p className="text-center text-zinc-500 py-20">Nenhuma notícia ainda. O bot vai buscar em breve. (Total no banco: {noticias.length})</p>}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtradas.map(n => (
+            <a key={n.id} href={n.link} target="_blank" className="bg-[#1a1a1a] rounded-xl overflow-hidden hover:scale-[1.02] transition">
+              {n.imagem_url && <img src={n.imagem_url} alt={n.titulo} className="w-full h-48 object-cover"/>}
+              <div className="p-4">
+                <span className="text-[10px] bg-[#008CFF] px-2 py-1 rounded font-bold">{n.categoria}</span>
+                <h3 className="font-bold mt-2 line-clamp-2">{n.titulo}</h3>
+                {n.resumo && <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{n.resumo}</p>}
+                <p className="text-[10px] text-zinc-500 mt-2">{n.fonte}</p>
+              </div>
+            </a>
+          ))}
         </div>
       </div>
     </section>
