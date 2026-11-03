@@ -1,81 +1,78 @@
-"use client";
-import { useState, useEffect } from 'react';
+"use client"
+import { useEffect, useState } from "react"
 
 type Noticia = {
-  id: string;
-  titulo: string;
-  resumo?: string;
-  categoria: string;
-  link: string;
-  imagem_url?: string;
-  fonte?: string;
-  created_at?: string;
-};
-
-const CATEGORIAS = ["TODOS","SERTANEJO","FORRÓ","PISEIRO","POP","ELETRÔNICO","BREGA","PAGODE"];
+  id: string
+  titulo: string
+  resumo: string
+  imagem_url: string
+  fonte_nome: string
+  created_at: string
+}
 
 export default function MundoMusicaSection() {
-  const [noticias, setNoticias] = useState<Noticia[]>([]);
-  const [filtro, setFiltro] = useState("TODOS");
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
+  const [noticias, setNoticias] = useState<Noticia[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  async function load() {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/noticias', { cache: 'no-store' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao buscar noticias')
+      setNoticias(Array.isArray(data) ? data : [])
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const res = await fetch('/api/noticias', { cache: 'no-store' });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Erro buscar noticias');
-        // se for debug {data: [...]}, pega data
-        const arr = Array.isArray(json) ? json : json.data || [];
-        // deduplica por link
-        const uniq = Array.from(new Map(arr.map((n:any)=>[n.link, n])).values());
-        setNoticias(uniq);
-      } catch (e:any) {
-        setErro(e.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
-
-  const filtradas = filtro === "TODOS" ? noticias : noticias.filter(n => n.categoria?.toUpperCase() === filtro);
+    load()
+  }, [])
 
   return (
-    <section className="bg-[#111] text-white py-10 px-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h2 className="text-4xl font-black italic">MUNDO DA <span className="text-[#008CFF]">MÚSICA</span></h2>
-            <p className="text-zinc-400 text-sm mt-1">Fique por dentro de tudo que rola - de forró a eletrônico</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIAS.map(cat => (
-              <button key={cat} onClick={()=>setFiltro(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold border ${filtro===cat ? 'bg-[#008CFF] border-[#008CFF] text-white' : 'border-zinc-700 text-zinc-400 hover:border-white'}`}>{cat}</button>
-            ))}
-          </div>
+    <section className="py-12 bg-zinc-950 border-t border-zinc-800">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex justify-between items-end mb-8">
+          <h2 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter">
+            MUNDO DA MÚSICA <span className="text-zinc-600 not-italic font-normal text-xl">• BRASIL E MUNDO</span>
+          </h2>
+          <button onClick={load} className="text-xs text-zinc-500 hover:text-white border border-zinc-800 px-3 py-1 rounded-full">Atualizar</button>
         </div>
 
-        {loading && <p className="text-center text-zinc-500 py-20">Carregando notícias...</p>}
-        {erro && <p className="text-center text-red-400 py-20">Erro: {erro} - Verifique /api/noticias</p>}
-        {!loading && !erro && filtradas.length === 0 && <p className="text-center text-zinc-500 py-20">Nenhuma notícia ainda. O bot vai buscar em breve. (Total no banco: {noticias.length})</p>}
+        {loading && <p className="text-zinc-500 animate-pulse">Carregando notícias...</p>}
+        {error && <p className="text-red-400 bg-red-950/30 border border-red-900 p-4 rounded-xl">Erro: {error} - Verifique /api/noticias</p>}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtradas.map(n => (
-            <a key={n.id} href={n.link} target="_blank" className="bg-[#1a1a1a] rounded-xl overflow-hidden hover:scale-[1.02] transition">
-              {n.imagem_url && <img src={n.imagem_url} alt={n.titulo} className="w-full h-48 object-cover"/>}
-              <div className="p-4">
-                <span className="text-[10px] bg-[#008CFF] px-2 py-1 rounded font-bold">{n.categoria}</span>
-                <h3 className="font-bold mt-2 line-clamp-2">{n.titulo}</h3>
-                {n.resumo && <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{n.resumo}</p>}
-                <p className="text-[10px] text-zinc-500 mt-2">{n.fonte}</p>
+        {!loading && !error && noticias.length === 0 && (
+          <p className="text-zinc-500">Nenhuma notícia no banco. Rode seu bot /forcar-noticias</p>
+        )}
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {noticias.map((n) => (
+            <article key={n.id} className="group bg-zinc-900 rounded-[20px] overflow-hidden border border-zinc-800 hover:border-zinc-600 transition-all duration-300 hover:scale-[1.02]">
+              <div className="relative overflow-hidden">
+                <img src={n.imagem_url} alt={n.titulo} className="w-full h-52 object-cover group-hover:scale-105 transition duration-500" />
+                <div className="absolute top-3 left-3">
+                  <span className="text-[10px] tracking-widest bg-white text-black px-2.5 py-1 rounded-full font-black uppercase">
+                    {n.fonte_nome}
+                  </span>
+                </div>
               </div>
-            </a>
+              <div className="p-5 flex flex-col h-[200px]">
+                <h3 className="font-bold text-[17px] leading-[1.2] line-clamp-2">{n.titulo}</h3>
+                <p className="text-[13px] text-zinc-400 mt-2 line-clamp-3 flex-1">{n.resumo}</p>
+                <div className="mt-4 pt-3 border-t border-zinc-800 flex justify-between items-center">
+                  <p className="text-[11px] text-zinc-500">Fonte: {n.fonte_nome}</p>
+                  <p className="text-[10px] text-zinc-600">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
+                </div>
+              </div>
+            </article>
           ))}
         </div>
       </div>
     </section>
-  );
+  )
 }
