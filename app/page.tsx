@@ -1,4 +1,4 @@
-import MundoMusicaSection from "@/components/MundoMusicaSection";
+import MaisTocadasSection from "@/components/MaisTocadasSection";
 import BannerPrincipal from "@/components/BannerPrincipal";
 import BaladasSection from "@/components/BaladasSection";
 import GaleriaSection from "@/components/GaleriaSection";
@@ -16,7 +16,7 @@ export default function Home() {
             <a href="#banner" className="hover:text-white">Início</a>
             <a href="#baladas" className="hover:text-white">Baladas</a>
             <a href="#galeria" className="hover:text-white">Galeria</a>
-            <a href="#musica" className="hover:text-white">Música</a>
+            <a href="#musica" className="hover:text-white">Top Hits</a>
           </nav>
           <a href="/admin" className="text-xs bg-white text-black px-4 py-2 rounded-full font-bold">Admin</a>
         </div>
@@ -25,7 +25,7 @@ export default function Home() {
       <BannerPrincipal />
       <BaladasSection />
       <GaleriaSection />
-      <MundoMusicaSection />
+      <MaisTocadasSection />
       <FooterContatos />
     </main>
   )

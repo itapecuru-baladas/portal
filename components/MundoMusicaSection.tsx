@@ -54,7 +54,7 @@ export default function MundoMusicaSection() {
           {noticias.map((n) => (
             <article key={n.id} className="group bg-zinc-900 rounded-[20px] overflow-hidden border border-zinc-800 hover:border-zinc-600 transition-all duration-300 hover:scale-[1.02]">
               <div className="relative overflow-hidden">
-                <img src={n.imagem_url && n.imagem_url !== "None" ? n.imagem_url : "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800"} alt={n.titulo} className="w-full h-52 object-cover group-hover:scale-105 transition duration-500" />
+                <img src={n.imagem_url} alt={n.titulo} className="w-full h-52 object-cover group-hover:scale-105 transition duration-500" />
                 <div className="absolute top-3 left-3">
                   <span className="text-[10px] tracking-widest bg-white text-black px-2.5 py-1 rounded-full font-black uppercase">
                     {n.fonte_nome}
