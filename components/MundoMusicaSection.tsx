@@ -1,78 +1,74 @@
-"use client"
-import { useEffect, useState } from "react"
+"use client";
+import { useEffect, useState } from "react";
 
 type Noticia = {
-  id: string
-  titulo: string
-  resumo: string
-  imagem_url: string
-  fonte_nome: string
-  created_at: string
-}
+  id: string;
+  titulo: string;
+  resumo: string;
+  categoria?: string;
+  capa_url?: string;
+  created_at: string;
+  fonte?: string;
+};
 
 export default function MundoMusicaSection() {
-  const [noticias, setNoticias] = useState<Noticia[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  async function load() {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/noticias', { cache: 'no-store' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Erro ao buscar noticias')
-      setNoticias(Array.isArray(data) ? data : [])
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    load()
-  }, [])
+    async function load() {
+      try {
+        const res = await fetch("/api/noticias", { cache: "no-store" });
+        const data = await res.json();
+        if (Array.isArray(data)) setNoticias(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   return (
-    <section className="py-12 bg-zinc-950 border-t border-zinc-800">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-between items-end mb-8">
-          <h2 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter">
-            MUNDO DA MÚSICA <span className="text-zinc-600 not-italic font-normal text-xl">• BRASIL E MUNDO</span>
-          </h2>
-          <button onClick={load} className="text-xs text-zinc-500 hover:text-white border border-zinc-800 px-3 py-1 rounded-full">Atualizar</button>
+    <section id="mundo-musica" className="max-w-7xl mx-auto px-6 py-12">
+      <div className="flex items-end gap-4 mb-8">
+        <h3 className="futur-title text-white text-xl md:text-2xl tracking-widest">MUNDO DA MÚSICA</h3>
+        <div className="flex gap-1 mb-1.5">
+          {[8,12,18,24,32,24,18,12,8].map((h,i)=>(
+            <div key={i} className="ib-equalizer-bar w-[4px]" style={{height: h}} />
+          ))}
         </div>
+        <div className="h-[1px] flex-1 bg-gradient-to-r from-[#0077FF] to-transparent ml-4 mb-3" />
+      </div>
 
-        {loading && <p className="text-zinc-500 animate-pulse">Carregando notícias...</p>}
-        {error && <p className="text-red-400 bg-red-950/30 border border-red-900 p-4 rounded-xl">Erro: {error} - Verifique /api/noticias</p>}
-
-        {!loading && !error && noticias.length === 0 && (
-          <p className="text-zinc-500">Nenhuma notícia no banco. Rode seu bot /forcar-noticias</p>
-        )}
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {noticias.map((n) => (
-            <article key={n.id} className="group bg-zinc-900 rounded-[20px] overflow-hidden border border-zinc-800 hover:border-zinc-600 transition-all duration-300 hover:scale-[1.02]">
-              <div className="relative overflow-hidden">
-                <img src={n.imagem_url} alt={n.titulo} className="w-full h-52 object-cover group-hover:scale-105 transition duration-500" />
-                <div className="absolute top-3 left-3">
-                  <span className="text-[10px] tracking-widest bg-white text-black px-2.5 py-1 rounded-full font-black uppercase">
-                    {n.fonte_nome}
-                  </span>
-                </div>
-              </div>
-              <div className="p-5 flex flex-col h-[200px]">
-                <h3 className="font-bold text-[17px] leading-[1.2] line-clamp-2">{n.titulo}</h3>
-                <p className="text-[13px] text-zinc-400 mt-2 line-clamp-3 flex-1">{n.resumo}</p>
-                <div className="mt-4 pt-3 border-t border-zinc-800 flex justify-between items-center">
-                  <p className="text-[11px] text-zinc-500">Fonte: {n.fonte_nome}</p>
-                  <p className="text-[10px] text-zinc-600">{new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1,2,3,4,5,6].map(i=>(
+            <div key={i} className="h-64 bg-white/[0.04] animate-pulse rounded-lg border border-white/5" />
+          ))}
+        </div>
+      ) : noticias.length === 0 ? (
+        <p className="text-white/40 text-sm">Nenhuma notícia encontrada no Supabase.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {noticias.map(n => (
+            <article key={n.id || n.titulo} className="group bg-[#0A0A0A] border border-white/10 rounded-xl overflow-hidden hover:border-[#0077FF]/50 transition">
+              {n.capa_url && <div className="h-44 w-full bg-cover bg-center" style={{backgroundImage: `url(${n.capa_url})`}} />}
+              <div className="p-5">
+                <span className="futur-title text-[10px] tracking-widest text-[#00A6FF]">{n.categoria || "MÚSICA"}</span>
+                <h4 className="mt-2 font-bold text-white leading-tight group-hover:text-[#00A6FF] transition line-clamp-2">{n.titulo}</h4>
+                <p className="mt-2 text-sm text-white/60 line-clamp-2">{n.resumo}</p>
+                <div className="mt-4 flex justify-between items-center">
+                  <span className="text-[11px] text-white/30">{new Date(n.created_at).toLocaleDateString("pt-BR")}</span>
+                  {/* CITAÇÃO DA FONTE SEM LINK EXTERNO - padrão Itapecuru Baladas */}
+                  <span className="text-[11px] tracking-widest text-white/40 font-light">Fonte: Itapecuru Baladas</span>
                 </div>
               </div>
             </article>
           ))}
         </div>
-      </div>
+      )}
     </section>
-  )
+  );
 }
